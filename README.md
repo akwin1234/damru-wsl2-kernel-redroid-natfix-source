@@ -4,6 +4,37 @@ This repository is a Damru-focused WSL2 kernel source tree based on Microsoft's 
 
 It exists so Damru users can reproduce the WSL2 custom kernel used for Redroid plus Docker bridge/NAT support.
 
+## Download Prebuilt Kernel
+
+Most Damru users should use the compiled release asset instead of rebuilding the kernel.
+
+- Release: https://github.com/akwin1234/damru-wsl2-kernel-redroid-natfix-source/releases/tag/v6.6.114.1-damru-redroid-natfix-20260602
+- Kernel binary: https://github.com/akwin1234/damru-wsl2-kernel-redroid-natfix-source/releases/download/v6.6.114.1-damru-redroid-natfix-20260602/wsl2-kernel-redroid-natfix-20260602
+- SHA256: `1c2a5c2c4737a02b8f81dcd82162727cb5644d194bb9cfb2f9162a9862b03c6e`
+
+PowerShell install example:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.damru\wsl-kernel" | Out-Null
+Invoke-WebRequest `
+  -Uri "https://github.com/akwin1234/damru-wsl2-kernel-redroid-natfix-source/releases/download/v6.6.114.1-damru-redroid-natfix-20260602/wsl2-kernel-redroid-natfix-20260602" `
+  -OutFile "$env:USERPROFILE\.damru\wsl-kernel\wsl2-kernel-redroid-natfix-20260602"
+Get-FileHash -Algorithm SHA256 "$env:USERPROFILE\.damru\wsl-kernel\wsl2-kernel-redroid-natfix-20260602"
+```
+
+Then create or update `%UserProfile%\.wslconfig`:
+
+```ini
+[wsl2]
+kernel=C:\Users\<you>\.damru\wsl-kernel\wsl2-kernel-redroid-natfix-20260602
+```
+
+Restart WSL:
+
+```powershell
+wsl --shutdown
+```
+
 ## What Changed
 
 The important change is the checked-in Damru kernel config:
@@ -35,7 +66,7 @@ Key built-in options include:
 
 There is also a small compile-compatibility source fix in `tools/lib/bpf/libbpf.c`.
 
-## Build
+## Build From Source
 
 Build inside WSL/Linux, not Windows. The Linux kernel tree contains filenames that Windows cannot safely check out.
 
@@ -54,7 +85,7 @@ The built kernel image will be at:
 arch/x86/boot/bzImage
 ```
 
-## Install In WSL2
+## Manual Install In WSL2
 
 Copy `arch/x86/boot/bzImage` to a stable Windows path, for example:
 
