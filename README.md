@@ -1,79 +1,97 @@
-# Introduction
+# Damru WSL2 Redroid NAT Kernel
 
-The [WSL2-Linux-Kernel][wsl2-kernel] repo contains the kernel source code and
-configuration files for the [WSL2][about-wsl2] kernel.
+This repository is a Damru-focused WSL2 kernel source tree based on Microsoft's `WSL2-Linux-Kernel` commit `308063c46f2741b64f3f9120fd85372ac842d6d8` (`linux-msft-wsl-6.6.114.1`).
 
-# Reporting Bugs
+It exists so Damru users can reproduce the WSL2 custom kernel used for Redroid plus Docker bridge/NAT support.
 
-If you discover an issue relating to WSL or the WSL2 kernel, please report it on
-the [WSL GitHub project][wsl-issue]. It is not possible to report issues on the
-[WSL2-Linux-Kernel][wsl2-kernel] project.
+## What Changed
 
-If you're able to determine that the bug is present in the upstream Linux
-kernel, you may want to work directly with the upstream developers. Please note
-that there are separate processes for reporting a [normal bug][normal-bug] and
-a [security bug][security-bug].
+The important change is the checked-in Damru kernel config:
 
-# Feature Requests
+- `damru-redroid-natfix.config`
+- `Documentation/damru/wsl2-redroid-natfix.config`
 
-Is there a missing feature that you'd like to see? Please request it on the
-[WSL GitHub project][wsl-issue].
+That config keeps the WSL2/Redroid binder support needed by Damru and makes Docker bridge/NAT dependencies built into the kernel instead of relying on missing WSL module files.
 
-If you're able and interested in contributing kernel code for your feature
-request, we encourage you to [submit the change upstream][submit-patch].
+Key built-in options include:
 
-# Build Instructions
+- `CONFIG_BRIDGE=y`
+- `CONFIG_BRIDGE_NETFILTER=y`
+- `CONFIG_STP=y`
+- `CONFIG_LLC=y`
+- `CONFIG_IP_NF_IPTABLES=y`
+- `CONFIG_IP_NF_FILTER=y`
+- `CONFIG_IP_NF_NAT=y`
+- `CONFIG_IP_NF_TARGET_MASQUERADE=y`
+- `CONFIG_IP_NF_TARGET_REDIRECT=y`
+- `CONFIG_IP_NF_MANGLE=y`
+- `CONFIG_IP_NF_RAW=y`
+- `CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y`
+- `CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y`
+- `CONFIG_NETFILTER_XT_MATCH_MULTIPORT=y`
+- `CONFIG_NETFILTER_XT_MATCH_STATE=y`
+- `CONFIG_NETFILTER_XT_TARGET_MASQUERADE=y`
+- `CONFIG_NETFILTER_XT_TARGET_REDIRECT=y`
 
-Instructions for building an x86_64 WSL2 kernel with an Ubuntu distribution using bash are
-as follows:
+There is also a small compile-compatibility source fix in `tools/lib/bpf/libbpf.c`.
 
-1. Install the build dependencies:  
-   `$ sudo apt install build-essential flex bison dwarves libssl-dev libelf-dev cpio qemu-utils`
+## Build
 
-2. Modify WSL2 kernel configs (optional):  
-   `$ make menuconfig KCONFIG_CONFIG=Microsoft/config-wsl`
+Build inside WSL/Linux, not Windows. The Linux kernel tree contains filenames that Windows cannot safely check out.
 
-3. Build the kernel using the WSL2 kernel configuration and put the modules in a `modules`
-   folder under the current working directory:  
-   `$ make KCONFIG_CONFIG=Microsoft/config-wsl && make INSTALL_MOD_PATH="$PWD/modules" modules_install`
-   
-   You may wish to include `-j$(nproc)` on the first `make` command to build in parallel.
+```bash
+sudo apt update
+sudo apt install -y build-essential flex bison dwarves libssl-dev libelf-dev bc cpio qemu-utils
 
-Then, you can use a provided script to create a VHDX containing the modules:
-   `$ sudo ./Microsoft/scripts/gen_modules_vhdx.sh "$PWD/modules" $(make -s kernelrelease) modules.vhdx`
+cp damru-redroid-natfix.config .config
+make olddefconfig
+make -j"$(nproc)"
+```
 
-To save space, you can now delete the compilation artifacts:
-   `$ make clean && rm -r "$PWD/modules"`
+The built kernel image will be at:
 
-If you prefer, you can also build the modules VHDX manually as follows:
+```text
+arch/x86/boot/bzImage
+```
 
-1. Calculate the modules size (plus 256MiB for slack):
-   `modules_size=$(du -bs "$PWD/modules" | awk '{print $1;}'); modules_size=$((modules_size + (256 * (1<<20))));`
+## Install In WSL2
 
-2. Create a blank image file for the modules:
-   `dd if=/dev/zero of="$PWD/modules.img" bs=1024 count=$((modules_size / 1024))`
+Copy `arch/x86/boot/bzImage` to a stable Windows path, for example:
 
-3. Setup filesystem and mount img file:
-   `lo_dev=$(sudo losetup --find --show "$PWD/modules.img") && sudo mkfs -t ext4 "$lo_dev" && mkdir "$PWD/modules_img" && sudo mount "$lo_dev" "$PWD/modules_img"`
+```text
+C:\Users\<you>\.damru\wsl-kernel\wsl2-kernel-redroid-natfix
+```
 
-4. Copy over the modules, unmount the img now that we're done with it:
-   `sudo cp -r "$PWD/modules/lib/modules/$(make -s kernelrelease)"/* "$PWD/modules_img" && sudo umount "$PWD/modules_img"`
+Then set `%UserProfile%\.wslconfig`:
 
-5. Convert the img to VHDX:
-   `qemu-img convert -O vhdx "$PWD/modules.img" "$PWD/modules.vhdx"`
+```ini
+[wsl2]
+kernel=C:\Users\<you>\.damru\wsl-kernel\wsl2-kernel-redroid-natfix
+```
 
-6. Clean up:
-   `rm modules.img # optionally $PWD/modules dir and the now-empty $PWD_modules_img dir too`
+Restart WSL:
 
-# Install Instructions
+```powershell
+wsl --shutdown
+```
 
-Please see the documentation on the [.wslconfig configuration
-file][install-inst] for information on using a custom built kernel.
+## Verify
 
-[wsl2-kernel]:  https://github.com/microsoft/WSL2-Linux-Kernel
-[about-wsl2]:   https://docs.microsoft.com/en-us/windows/wsl/about#what-is-wsl-2
-[wsl-issue]:    https://github.com/microsoft/WSL/issues/new/choose
-[normal-bug]:   https://www.kernel.org/doc/html/latest/admin-guide/bug-hunting.html#reporting-the-bug
-[security-bug]: https://www.kernel.org/doc/html/latest/admin-guide/security-bugs.html
-[submit-patch]: https://www.kernel.org/doc/html/latest/process/submitting-patches.html
-[install-inst]: https://docs.microsoft.com/en-us/windows/wsl/wsl-config#configure-global-options-with-wslconfig
+Inside the WSL distro:
+
+```bash
+zgrep -E 'ANDROID_BINDER|BRIDGE_NETFILTER|XT_MATCH_ADDRTYPE|IP_NF_NAT|TARGET_MASQUERADE' /proc/config.gz
+sudo sysctl -w net.ipv4.ip_forward=1
+sudo iptables -F
+sudo iptables -t nat -F
+sudo iptables -t nat -A POSTROUTING -s 172.17.0.0/16 -j MASQUERADE
+docker run --rm alpine ping -c 3 8.8.8.8
+```
+
+Expected result: Docker containers can reach the internet, and Damru Redroid can use the custom WSL kernel path.
+
+## Upstream
+
+Original source: https://github.com/microsoft/WSL2-Linux-Kernel
+
+Base commit: `308063c46f2741b64f3f9120fd85372ac842d6d8`
